@@ -1,0 +1,184 @@
+/-
+Copyright (c) 2026 The Tau Ceti contributors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: The Tau Ceti contributors
+-/
+module
+
+public import Mathlib.Analysis.CStarAlgebra.Matrix
+public import Mathlib.LinearAlgebra.Matrix.Rank
+import Mathlib.Tactic.FieldSimp
+import Mathlib.Tactic.Ring
+
+/-!
+# The map of a matrix on Euclidean space
+
+Two ingredients of a linear change of variables on `EuclideanSpace 𝕜 ι`.
+
+Pulling the quadratic form `x ↦ ⟪x, B x⟫` of a square matrix `B` back along the linear map of a
+rectangular matrix `A` gives the quadratic form of the congruent matrix `Aᴴ * B * A`. This is
+the change-of-variables identity behind every computation of a quadratic statistic after a linear
+transformation of the underlying vector.
+
+The rank of a matrix is the rank of the linear map it induces, in both the `ℕ`-valued and the
+`Cardinal`-valued sense; this is what lets a matrix-rank statement be read off an operator-rank
+one.
+
+Normal square matrices induce normal operators on Euclidean space.
+The instance `Matrix.isStarNormal_toEuclideanLin` supplies this normality automatically
+from `IsStarNormal A`.
+
+An invertible square matrix induces not just a map but a continuous linear equivalence, whose
+inverse is the map of the inverse matrix. That is the form a substitution needs: it supplies the
+inverse substitution and, through `LinearMap.det_toLpLin`, the Jacobian.
+
+A square matrix is unitary exactly when its continuous linear map preserves the inner product.
+
+## Main results
+
+* `Matrix.inner_toEuclideanLin_toEuclideanLin` — the quadratic form of `B` at `A x` is the
+  quadratic form of `Aᴴ * B * A` at `x`;
+* `Matrix.rank_eq_finrank_range_toEuclideanLin`, `Matrix.rank_coe_toEuclideanCLM` — the matrix
+  rank is the dimension of the range of the induced map, and the `LinearMap.rank` of the induced
+  continuous linear map;
+* `Matrix.mem_unitaryGroup_iff_inner_toEuclideanCLM` — a matrix is unitary exactly when its
+  Euclidean operator preserves the inner product;
+* `Matrix.toEuclideanCLE` — the continuous linear equivalence of an invertible matrix, with its
+  `apply`, `symm_apply`, coercion and determinant lemmas.
+-/
+
+public section
+
+open scoped InnerProductSpace
+
+namespace Matrix
+
+variable {𝕜 : Type*} [RCLike 𝕜] {ι κ : Type*} [Fintype ι] [DecidableEq ι] [Fintype κ]
+  [DecidableEq κ]
+
+/-- Pulling the quadratic form of `B` back along the linear map of `A` gives the quadratic form
+of the congruent matrix `Aᴴ * B * A`. -/
+theorem inner_toEuclideanLin_toEuclideanLin (A : Matrix κ ι 𝕜) (B : Matrix κ κ 𝕜)
+    (x : EuclideanSpace 𝕜 ι) :
+    ⟪A.toEuclideanLin x, B.toEuclideanLin (A.toEuclideanLin x)⟫_𝕜 =
+      ⟪x, (Aᴴ * B * A).toEuclideanLin x⟫_𝕜 := by
+  rw [← LinearMap.adjoint_inner_right, ← toEuclideanLin_conjTranspose_eq_adjoint]
+  simp only [toEuclideanLin, toLpLin_mul_same, LinearMap.comp_apply]
+
+omit [Fintype κ] [DecidableEq κ] in
+/-- The rank of a matrix is the dimension of the range of the linear map it induces on Euclidean
+space. -/
+theorem rank_eq_finrank_range_toEuclideanLin [Finite κ] (A : Matrix κ ι 𝕜) :
+    A.rank = Module.finrank 𝕜 (LinearMap.range (toEuclideanLin A)) := by
+  have : Fintype κ := Fintype.ofFinite κ
+  rw [toEuclideanLin_eq_toLin_orthonormal]
+  exact A.rank_eq_finrank_range_toLin (EuclideanSpace.basisFun κ 𝕜).toBasis
+    (EuclideanSpace.basisFun ι 𝕜).toBasis
+
+/-- The `Cardinal`-valued rank of the continuous linear map of a square matrix is its matrix rank.
+This is the bridge that turns an operator-rank statement into a matrix-rank one. -/
+theorem rank_coe_toEuclideanCLM (A : Matrix ι ι 𝕜) :
+    LinearMap.rank
+        (toEuclideanCLM (n := ι) (𝕜 := 𝕜) A : EuclideanSpace 𝕜 ι →ₗ[𝕜] EuclideanSpace 𝕜 ι) =
+      A.rank := by
+  rw [LinearMap.rank, coe_toEuclideanCLM_eq_toEuclideanLin, ← Module.finrank_eq_rank,
+    rank_eq_finrank_range_toEuclideanLin]
+
+/-- The continuous linear map of a matrix acts as its Euclidean linear map. -/
+@[simp]
+theorem toEuclideanCLM_apply (A : Matrix ι ι 𝕜) (x : EuclideanSpace 𝕜 ι) :
+    toEuclideanCLM (𝕜 := 𝕜) A x = toEuclideanLin A x := by
+  rw [← coe_toEuclideanCLM_eq_toEuclideanLin, ContinuousLinearMap.coe_coe]
+
+/-- A square matrix is unitary exactly when its Euclidean operator preserves the inner product. -/
+theorem mem_unitaryGroup_iff_inner_toEuclideanCLM {M : Matrix ι ι 𝕜} :
+    M ∈ unitaryGroup ι 𝕜 ↔ ∀ x y : EuclideanSpace 𝕜 ι,
+      ⟪toEuclideanCLM (n := ι) (𝕜 := 𝕜) M x, toEuclideanCLM (n := ι) (𝕜 := 𝕜) M y⟫_𝕜 =
+        ⟪x, y⟫_𝕜 := by
+  refine ⟨fun hM ↦ ContinuousLinearMap.inner_map_map_of_mem_unitary
+    (Unitary.map_mem (toEuclideanCLM (n := ι) (𝕜 := 𝕜)) hM), fun h ↦ ?_⟩
+  rw [mem_unitaryGroup_iff']
+  refine EquivLike.injective (toEuclideanCLM (n := ι) (𝕜 := 𝕜)) ?_
+  rw [map_mul, map_star, map_one, ContinuousLinearMap.star_eq_adjoint]
+  exact (ContinuousLinearMap.inner_map_map_iff_adjoint_comp_self _).mp h
+
+/-- The determinant of a diagonal continuous linear map is the product of its diagonal entries. -/
+@[simp]
+theorem det_toEuclideanCLM_diagonal (d : ι → 𝕜) :
+    (toEuclideanCLM (𝕜 := 𝕜) (diagonal d)).det = ∏ i, d i := by
+  rw [ContinuousLinearMap.det, coe_toEuclideanCLM_eq_toEuclideanLin,
+    LinearMap.det_toLpLin, det_diagonal]
+
+section Invertible
+
+/-- **The continuous linear equivalence of an invertible matrix** on Euclidean space, defined
+when `A.det` is a unit. It acts as `A` does, and its inverse is the map of `A⁻¹`, so a change of
+variables along it substitutes `A⁻¹`. -/
+noncomputable def toEuclideanCLE (A : Matrix ι ι 𝕜) (hA : A.det ≠ 0) :
+    EuclideanSpace 𝕜 ι ≃L[𝕜] EuclideanSpace 𝕜 ι :=
+  (toEuclideanCLM (𝕜 := 𝕜) A).toContinuousLinearEquivOfDetNeZero <| by
+    rw [ContinuousLinearMap.det, coe_toEuclideanCLM_eq_toEuclideanLin, LinearMap.det_toLpLin]
+    exact hA
+
+/-- The equivalence acts as the matrix does. -/
+@[simp]
+theorem toEuclideanCLE_apply (A : Matrix ι ι 𝕜) (hA : A.det ≠ 0) (x : EuclideanSpace 𝕜 ι) :
+    A.toEuclideanCLE hA x = A.toEuclideanLin x := by
+  rw [toEuclideanCLE, ContinuousLinearMap.toContinuousLinearEquivOfDetNeZero_apply,
+    toEuclideanCLM_apply]
+
+/-- The inverse of the equivalence is the map of the inverse matrix. -/
+@[simp]
+theorem toEuclideanCLE_symm_apply (A : Matrix ι ι 𝕜) (hA : A.det ≠ 0)
+    (y : EuclideanSpace 𝕜 ι) : (A.toEuclideanCLE hA).symm y = A⁻¹.toEuclideanLin y := by
+  rw [ContinuousLinearEquiv.symm_apply_eq, toEuclideanCLE_apply]
+  simp only [← toEuclideanCLM_apply]
+  rw [← mul_apply_eq_comp, ← map_mul, mul_nonsing_inv _ (isUnit_iff_ne_zero.mpr hA), map_one,
+    one_apply_eq_self]
+
+/-- The determinant of the equivalence is the determinant of the matrix. -/
+@[simp]
+theorem det_toEuclideanCLE (A : Matrix ι ι 𝕜) (hA : A.det ≠ 0) :
+    LinearMap.det (A.toEuclideanCLE hA : EuclideanSpace 𝕜 ι →ₗ[𝕜] EuclideanSpace 𝕜 ι) = A.det := by
+  have hcoe : (A.toEuclideanCLE hA : EuclideanSpace 𝕜 ι →ₗ[𝕜] EuclideanSpace 𝕜 ι)
+      = A.toEuclideanLin := LinearMap.ext fun x => A.toEuclideanCLE_apply hA x
+  rw [hcoe, LinearMap.det_toLpLin]
+
+end Invertible
+
+end Matrix
+
+namespace Matrix
+
+open scoped InnerProductSpace
+
+/-- The coordinate vector formed from the projections of the columns of `A` onto `ν`
+satisfies `⟪m, ν⟫ ‖ν‖² = ν ⬝ᵥ A ν`. -/
+theorem inner_sum_smul_basisFun_mul_norm_sq {ι : Type*} [Fintype ι]
+    (A : Matrix ι ι ℝ) {ν : EuclideanSpace ℝ ι} (hν : ν ≠ 0) :
+    ⟪∑ j, (⟪WithLp.toLp 2 (Aᵀ j), ν⟫_ℝ / ‖ν‖ ^ 2) • EuclideanSpace.basisFun ι ℝ j, ν⟫_ℝ *
+      ‖ν‖ ^ 2 = ν.ofLp ⬝ᵥ A *ᵥ ν.ofLp := by
+  classical
+  have hN : ‖ν‖ ^ 2 ≠ 0 := pow_ne_zero 2 (norm_ne_zero_iff.2 hν)
+  have hcol : ∀ j, ⟪WithLp.toLp 2 (Aᵀ j), ν⟫_ℝ = ∑ i, A i j * ν.ofLp i := fun j => by
+    simp [PiLp.inner_apply, mul_comm]
+  have hs : ∀ j, ⟪WithLp.toLp 2 (Aᵀ j), ν⟫_ℝ / ‖ν‖ ^ 2 * ν.ofLp j * ‖ν‖ ^ 2 =
+      (∑ i, A i j * ν.ofLp i) * ν.ofLp j := fun j => by
+    rw [hcol]
+    field_simp
+  simp only [sum_inner, real_inner_smul_left, EuclideanSpace.basisFun_inner, Finset.sum_mul, hs]
+  simp only [dotProduct, Matrix.mulVec, Finset.mul_sum]
+  rw [Finset.sum_comm]
+  exact Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun j _ => by ring
+
+variable {n : Type*} [Fintype n] [DecidableEq n]
+
+/-- The operator of a normal matrix on `EuclideanSpace 𝕜 n` is normal. -/
+instance isStarNormal_toEuclideanLin {𝕜 : Type*} [RCLike 𝕜] (A : Matrix n n 𝕜) [IsStarNormal A] :
+    IsStarNormal (toEuclideanLin A) where
+  star_comm_self := by
+    have h : Aᴴ * A = A * Aᴴ := star_comm_self' A
+    rw [commute_iff_eq, LinearMap.star_eq_adjoint, ← toEuclideanLin_conjTranspose_eq_adjoint,
+      Module.End.mul_eq_comp, Module.End.mul_eq_comp, ← toLpLin_mul_same, ← toLpLin_mul_same, h]
+
+end Matrix

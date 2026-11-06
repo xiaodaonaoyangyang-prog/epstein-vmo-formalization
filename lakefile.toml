@@ -1,0 +1,43 @@
+name = "epstein_vmo"
+version = "0.1.0"
+defaultTargets = ["EpsteinVMO"]
+packagesDir = "D:/lean/lizhong_quasiconformal_teichmuller/.lake/packages"
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "mathlib"
+path = "D:/lean/mathlib4-v436rc2"
+
+[[require]]
+name = "lizhong_quasiconformal_teichmuller"
+path = "D:/lean/lizhong_quasiconformal_teichmuller"
+
+[[lean_lib]]
+name = "EpsteinVMO"
+
+[[require]]
+name = "takhtajan_teo_wp"
+path = "D:/lean/takhtajan_teo_wp"
+
+[[lean_lib]]
+name = "DouadyEarleExt"
+# Vendored from D:/lean/Conformally_natural_extension_of_homeomorphisms_of_the_circle (import closure of
+# DouadyEarleExt.ImplicitZero, 6 modules); see VENDORED.md. Upstream sets no options.
+leanOptions = { autoImplicit = true, relaxedAutoImplicit = true }
+
+[[lean_lib]]
+name = "VanishingCarleson"
+# Vendored from D:/lean/vanishing_carleson (all 11 modules, main theorem axiom-clean); see VENDORED.md.
+leanOptions = { autoImplicit = true, relaxedAutoImplicit = true }
+
+[[lean_lib]]
+name = "TauCeti"
+# Vendored from D:/lean/external/TauCeti (commit a3d94a3f, Apache 2.0, same Mathlib rev 9d581dff): the import closure
+# needed for W-PDE1 (S05) and thm_injective (S10). Copied byte-for-byte (module system kept); see VENDORED.md and
+# collaboration/w2_vendor_verbatim.py. Upstream sets no autoImplicit options (Lean defaults); its linter/warningAsError
+# options are not carried over.
+globs = ["TauCeti.*"]
+leanOptions = { autoImplicit = true, relaxedAutoImplicit = true }

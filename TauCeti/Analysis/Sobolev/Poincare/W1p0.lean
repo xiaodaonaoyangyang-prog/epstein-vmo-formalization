@@ -1,0 +1,136 @@
+/-
+Copyright (c) 2026 The Tau Ceti contributors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: The Tau Ceti contributors
+-/
+module
+
+public import TauCeti.Analysis.Sobolev.Poincare.Slab
+public import TauCeti.Analysis.Sobolev.W1p.Zero
+
+/-!
+# The Poincaré inequality on `W^{1,p}_0(Ω)`
+
+This file proves the **Poincaré inequality** on `W^{1,p}_0(Ω)`: for `1 ≤ p ≤ ∞` and a domain
+`Ω ⊆ ℝ^{n+1}` trapped between two parallel hyperplanes at distance `b - a`,
+
+`‖u‖_p ≤ (b - a) ‖∇u‖_p` for every `u ∈ W^{1,p}_0(Ω)`.
+
+Here `W^{1,p}_0(Ω)` is the closure of compactly supported smooth functions in `W^{1,p}(Ω)`,
+including at `p = ∞`.
+
+The estimate for a single test function is
+`TauCeti.eLpNorm_le_eLpNorm_fderiv_of_support_subset_slab`. The set
+`{u | ‖u‖_p ≤ C ‖∇u‖_p}` is closed and contains every test-function jet, so
+`TauCeti.w1p0Submodule_subset_of_isClosed` passes the estimate to their closure.
+
+The slab hypothesis is load-bearing: no such inequality holds on the whole space, by
+`TauCeti.not_exists_eLpNorm_le_const_mul_eLpNorm_fderiv`. So is the boundary condition: the
+constant function `1` on a nonempty bounded open `Ω` lies in `W^{1,p}(Ω)` with zero gradient.
+
+## Main declarations
+
+* `TauCeti.W1p.norm_value_le_mul_norm_gradient_of_subset_slab`: Poincaré on a slab-contained
+  domain.
+* `TauCeti.W1p.norm_value_le_mul_norm_gradient_of_subset_ball`: the bounded-ball corollary.
+
+## References
+
+L. C. Evans, *Partial Differential Equations*, Sections 5.2 and 5.6.
+-/
+
+public section
+
+noncomputable section
+
+namespace TauCeti
+
+open MeasureTheory Set TopologicalSpace
+open scoped Distributions ENNReal Gradient InnerProductSpace
+
+variable {n : ℕ} {Omega : Opens (EuclideanSpace ℝ (Fin (n + 1)))} {p : ENNReal} [Fact (1 ≤ p)]
+
+omit [Fact (1 ≤ p)] in
+/-- The `Lᵖ` norm of a test function on `Ω` is computed by the ambient Lebesgue measure: the
+function vanishes outside `Ω`, so restricting the measure changes nothing. -/
+private theorem norm_testFunctionLp_eq (phi : 𝓓(Omega, ℝ)) :
+    ‖testFunctionLp (mu := volume) p phi‖ = (eLpNorm (phi : _ → ℝ) p volume).toReal := by
+  rw [Lp.norm_def, ← Lp.enorm_def, enorm_testFunctionLp_eq_eLpNorm]
+
+omit [Fact (1 ≤ p)] in
+/-- The `Lᵖ` norm of the gradient of a test function on `Ω`, computed by the ambient Lebesgue
+measure and expressed through the Fréchet derivative. -/
+private theorem norm_gradientTestFunctionLp_eq (phi : 𝓓(Omega, ℝ)) :
+    ‖gradientTestFunctionLp (mu := volume) p phi‖ =
+      (eLpNorm (fderiv ℝ (phi : _ → ℝ)) p volume).toReal := by
+  rw [Lp.norm_def, ← Lp.enorm_def, enorm_gradientTestFunctionLp_eq_eLpNorm_fderiv]
+
+/-- The Poincaré inequality for a single test function whose domain lies in a slab. -/
+private theorem norm_testFunctionLp_le_of_subset_slab {i : Fin (n + 1)} {a b : ℝ}
+    (hOmega : ∀ x ∈ (Omega : Set (EuclideanSpace ℝ (Fin (n + 1)))), x i ∈ Icc a b)
+    (phi : 𝓓(Omega, ℝ)) :
+    ‖testFunctionLp (mu := volume) p phi‖ ≤
+      (b - a) * ‖gradientTestFunctionLp (mu := volume) p phi‖ := by
+  rcases lt_or_ge b a with hba | hab
+  · have hempty : (Omega : Set (EuclideanSpace ℝ (Fin (n + 1)))) = ∅ := by
+      apply eq_empty_iff_forall_notMem.mpr
+      intro x hx
+      exact hba.not_ge ((hOmega x hx).1.trans (hOmega x hx).2)
+    have hbot : ae (volume.restrict (Omega : Set (EuclideanSpace ℝ (Fin (n + 1))))) = ⊥ :=
+      ae_eq_bot.2 (by rw [hempty, Measure.restrict_empty])
+    have hvalue : testFunctionLp (mu := volume) p phi = 0 :=
+      Lp.ext (by rw [hbot]; exact Filter.eventually_bot)
+    have hgradient : gradientTestFunctionLp (mu := volume) p phi = 0 :=
+      Lp.ext (by rw [hbot]; exact Filter.eventually_bot)
+    simp [hvalue, hgradient]
+  have hfinite : eLpNorm (fderiv ℝ (phi : _ → ℝ)) p volume ≠ ∞ :=
+    ((phi.contDiff.continuous_fderiv (by simp)).memLp_of_hasCompactSupport
+      (phi.hasCompactSupport.fderiv ℝ)).ne
+  have hslab := eLpNorm_le_eLpNorm_fderiv_of_support_subset_slab (i := i) (p := p)
+    (phi.contDiff.of_le (by simp))
+    (fun x hx => hOmega x (phi.tsupport_subset (subset_tsupport _ hx))) Fact.out
+  rw [norm_testFunctionLp_eq, norm_gradientTestFunctionLp_eq,
+    ← ENNReal.toReal_ofReal (sub_nonneg.2 hab), ← ENNReal.toReal_mul]
+  exact ENNReal.toReal_mono (ENNReal.mul_ne_top (by finiteness) hfinite) hslab
+
+/-- **The Poincaré inequality on `W^{1,p}_0(Ω)`.** If `1 ≤ p ≤ ∞` and the domain
+`Ω ⊆ ℝ^{n+1}` is trapped between the hyperplanes `xᵢ = a` and `xᵢ = b`, then every
+`u ∈ W^{1,p}_0(Ω)` satisfies `‖u‖_p ≤ (b - a) ‖∇u‖_p`.
+
+Only the width of the slab enters, so `Ω` need not be bounded; boundedness in one direction is
+enough. The endpoints may be in either order: reversed endpoints force `Ω` to be empty. -/
+theorem W1p.norm_value_le_mul_norm_gradient_of_subset_slab {i : Fin (n + 1)}
+    {a b : ℝ}
+    (hOmega : ∀ x ∈ (Omega : Set (EuclideanSpace ℝ (Fin (n + 1)))), x i ∈ Icc a b)
+    {u : W1p volume Omega p} (hu : u ∈ w1p0Submodule volume Omega p) :
+    ‖W1p.value u‖ ≤ (b - a) * ‖W1p.gradient u‖ := by
+  have hclosedL : IsClosed {v : W1p volume Omega p |
+      ‖W1p.valueL v‖ ≤ (b - a) * ‖W1p.gradientL v‖} :=
+    isClosed_le (W1p.valueL (mu := volume) (Omega := Omega) (p := p)).continuous.norm
+      ((W1p.gradientL (mu := volume) (Omega := Omega) (p := p)).continuous.norm.const_mul _)
+  have hclosed : IsClosed {v : W1p volume Omega p |
+      ‖W1p.value v‖ ≤ (b - a) * ‖W1p.gradient v‖} := by
+    simpa only [W1p.valueL_apply, W1p.gradientL_apply] using hclosedL
+  refine w1p0Submodule_subset_of_isClosed hclosed (fun phi => ?_) hu
+  simpa using norm_testFunctionLp_le_of_subset_slab hOmega phi
+
+/-- **The Poincaré inequality on `W^{1,p}_0(Ω)` for a bounded domain.** If `1 ≤ p ≤ ∞` and
+`Ω ⊆ ℝ^{n+1}` is contained in a ball of radius `R`, then
+`‖u‖_p ≤ 2R ‖∇u‖_p` for every `u ∈ W^{1,p}_0(Ω)`.
+
+The constant `2R` is not sharp, but it is explicit and independent of the centre. -/
+theorem W1p.norm_value_le_mul_norm_gradient_of_subset_ball
+    {c : EuclideanSpace ℝ (Fin (n + 1))} {R : ℝ}
+    (hOmega : (Omega : Set (EuclideanSpace ℝ (Fin (n + 1)))) ⊆ Metric.ball c R)
+    {u : W1p volume Omega p} (hu : u ∈ w1p0Submodule volume Omega p) :
+    ‖W1p.value u‖ ≤ 2 * R * ‖W1p.gradient u‖ := by
+  have hslab : ∀ x ∈ (Omega : Set (EuclideanSpace ℝ (Fin (n + 1)))),
+      x (0 : Fin (n + 1)) ∈ Icc (c 0 - R) (c 0 + R) :=
+    fun x hx => by
+      rw [← Real.closedBall_eq_Icc, Metric.mem_closedBall]
+      exact (PiLp.dist_apply_le x c 0).trans (Metric.mem_ball.1 (hOmega hx)).le
+  have hwidth : (c 0 + R) - (c 0 - R) = 2 * R := by ring
+  simpa only [hwidth] using W1p.norm_value_le_mul_norm_gradient_of_subset_slab
+    hslab hu
+
+end TauCeti

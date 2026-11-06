@@ -1,0 +1,8 @@
+/.lake/
+/collaboration/*
+!/collaboration/DEEP_WALLS.md
+!/collaboration/STATEMENT_CHANGES.md
+*.olean
+*.ilean
+*.trace
+*.log
